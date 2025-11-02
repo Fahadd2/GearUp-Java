@@ -1,0 +1,49 @@
+# Compiled class files
+
+*.class
+
+target/
+
+build/
+
+*.jar
+
+*.war
+
+*.ear
+
+# IDE files
+
+.idea/
+
+*.iml
+
+.vscode/
+
+*.swp
+
+*.swo
+
+# OS files
+
+.DS_Store
+
+Thumbs.db
+
+# Application properties (if contains secrets)
+
+# application.properties
+
+# application.yml
+
+# Logs
+
+*.log
+
+logs/
+
+# Database
+
+*.db
+
+*.sqlite
