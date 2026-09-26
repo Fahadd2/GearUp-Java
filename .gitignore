@@ -1,49 +1,35 @@
-# Compiled class files
+# Environment variables (secrets never go in git - see Factor III)
+.env
+*.env
+!.env.example
 
+# Build output
 *.class
-
 target/
-
 build/
-
 *.jar
-
 *.war
-
 *.ear
+!.mvn/wrapper/maven-wrapper.jar
 
 # IDE files
-
 .idea/
-
 *.iml
-
 .vscode/
-
+.classpath
+.project
+.settings/
 *.swp
-
 *.swo
 
 # OS files
-
 .DS_Store
-
 Thumbs.db
 
-# Application properties (if contains secrets)
-
-# application.properties
-
-# application.yml
-
-# Logs
-
+# Logs (the app logs to stdout only - see Factor XI)
 *.log
-
 logs/
 
-# Database
-
+# Local databases
 *.db
-
 *.sqlite
