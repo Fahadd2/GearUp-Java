@@ -266,9 +266,11 @@
         setMsg("msg-status", `Reservation status updated to ${status} ✔`, "ok");
         toast(`Reservation status updated to ${status}`, "ok");
 
-        // Refresh the reservation list
+        // Refresh the reservation list, and the car list too: changing a
+        // reservation's status also changes its car's status on the server.
         await loadReservations();
         await populateReservationSelect();
+        await loadCarsForStaff();
       }catch(err){
         setMsg("msg-status", err.message, "error");
         toast(err.message,"err");
@@ -400,11 +402,11 @@
             <div class="row" style="gap:12px; margin: 12px 0;">
               <label style="flex:1">
                 <small>Price/day</small>
-                <input type="number" id="price-${c.id}" value="${c.price_per_day}">
+                <input type="number" id="price-${c.id}" value="${c.price_per_day}" data-original="${c.price_per_day}">
               </label>
               <label style="flex:1">
                 <small>Status</small>
-                <select id="status-${c.id}">
+                <select id="status-${c.id}" data-original="${c.status}">
                   <option ${c.status==="Available"?"selected":""}>Available</option>
                   <option ${c.status==="Reserved"?"selected":""}>Reserved</option>
                   <option ${c.status==="Rented"?"selected":""}>Rented</option>
@@ -420,15 +422,23 @@
       }
     }
 
+    // Send only the fields the user changed, so a value that is out of date on
+    // this page (e.g. a status changed by a reservation) never overwrites the server's.
     async function updateCar(id) {
-      const price  = Number(document.getElementById(`price-${id}`).value);
-      const status = document.getElementById(`status-${id}`).value;
+      const priceEl  = document.getElementById(`price-${id}`);
+      const statusEl = document.getElementById(`status-${id}`);
+      const changes = {};
+      if (Number(priceEl.value) !== Number(priceEl.dataset.original)) changes.price_per_day = Number(priceEl.value);
+      if (statusEl.value !== statusEl.dataset.original) changes.status = statusEl.value;
+      if (Object.keys(changes).length === 0) { toast("No changes to save"); return; }
       try {
         const r = await api(`/cars/${id}`, {
           method: "PUT",
-          body: JSON.stringify({ price_per_day: price, status })
+          body: JSON.stringify(changes)
         });
         if (!r || !r.ok) throw new Error("Update failed");
+        priceEl.dataset.original = priceEl.value;
+        statusEl.dataset.original = statusEl.value;
         toast("Car updated successfully!");
       } catch {
         toast("Failed to update car", "err");

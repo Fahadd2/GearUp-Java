@@ -348,11 +348,13 @@ change described below.
 - **`auto_update_statuses`** (called automatically by the staff page) returned
   `{"updated": 1}`: RES-4, an Active reservation that ended on 2025-11-26 and was never paid,
   was closed as Cancelled.
-- **A bug found in the staff page** (inherited unchanged from the Python version, not a
-  backend bug): after a reservation's status changes, the "Manage Cars" cards are not
-  refreshed, and "Save Changes" sends the card's stale status along with the price. In the
+- **A bug found in the staff page, since fixed** (inherited from the Python version, not a
+  backend bug): after a reservation's status changed, the "Manage Cars" cards were not
+  refreshed, and "Save Changes" sent the card's stale status along with the price. In the
   test, the backend correctly set the TEST car to Rented when its reservation became Active,
-  and then saving a price change from the stale card set it back to Reserved.
+  and then saving a price change from the stale card set it back to Reserved. Now the car
+  list reloads after a status change, and "Save Changes" sends only the fields that were
+  actually changed (checked in the browser with a stubbed server).
 
 ### Verified without a database
 
