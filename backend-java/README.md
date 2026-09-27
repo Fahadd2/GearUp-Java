@@ -256,10 +256,14 @@ The API is kept compatible, with these deliberate changes:
   date has passed, *any* change to it fails, including starting, closing or cancelling it. This
   was confirmed on the production database: a no-op `UPDATE ... SET status = status` on a
   reservation that started 355 days ago was refused with `23514 ... violates check constraint
-  "no_past_start"` (in a transaction that was rolled back). All 6 existing reservations are
-  affected, in both the Python and the Java backend. `BookingService` enforces the rule when a
-  booking is created instead. Removing it from production is a separate decision:
-  `ALTER TABLE public.reservations DROP CONSTRAINT no_past_start;`
+  "no_past_start"` (in a transaction that was rolled back). All 6 existing reservations were
+  affected, in both the Python and the Java backend. The rule is still enforced where it belongs,
+  when a booking is created: by `BookingService` here and by the request validator in the
+  Python backend.
+  **The constraint was dropped from production on 2026-09-27**
+  (`ALTER TABLE public.reservations DROP CONSTRAINT no_past_start;`, run by the project owner);
+  only `min_one_day` remains. To restore it, the existing past-dated rows require `NOT VALID`:
+  `ALTER TABLE public.reservations ADD CONSTRAINT no_past_start CHECK (start_date >= CURRENT_DATE) NOT VALID;`
 - Readable IDs (`CAR-12`) are `GENERATED ALWAYS AS (...) STORED` columns.
 
 **Compatibility kept**
@@ -279,8 +283,9 @@ An honest summary of what has and has not been verified.
 
 ### Verified against the production database (2026-09-27)
 
-Rules followed: all six tables were backed up to CSV (outside the repository) first; no
-`create-schema`/`seed-cars`, no DROP/ALTER/TRUNCATE, no change to any existing row or password;
+Rules followed in this first round: all six tables were backed up to CSV (outside the
+repository) first; no `create-schema`/`seed-cars`, no DROP/ALTER/TRUNCATE, no change to any
+existing row or password;
 writes used only records marked `TEST`, which were deleted afterwards. A fresh snapshot after
 cleanup had **identical row counts and SHA-256 checksums** to the backup for all six tables.
 
@@ -298,9 +303,38 @@ cleanup had **identical row counts and SHA-256 checksums** to the backup for all
   overpaying or paying twice), rental close with a damage fee keeping the invoice `partial`,
   a manual cancel, the dashboard, and 403 for every wrong-role call.
 - **The concurrency demo passed** (see [above](#concurrency-demo-10-simultaneous-bookings)).
-- **The `no_past_start` problem is real** (see [Changes](#changes-from-the-python-backend)).
+- **The `no_past_start` problem was real** (see [Changes](#changes-from-the-python-backend)); the
+  constraint has since been dropped, and only `min_one_day` remains (checked read-only).
 - The log line `Booking {} confirmed for car {}` appeared once for each successful booking,
   and the server logged no errors.
+
+### Second round against the same database (2026-09-27)
+
+The project owner confirmed that all the data in this database is fictional and allowed the
+admin commands and one real status change, provided seeded cars were deleted afterwards. A
+second backup was taken first. After cleanup, a row-by-row comparison with that backup found
+**exactly one difference: reservation RES-4 changed from Active to Cancelled**, the approved
+change described below.
+
+- **`create-schema`, run twice** on the existing database: "Schema is up to date" both times
+  (exit code 0), and the enum types and constraints were unchanged afterwards.
+- **`seed-cars`, run twice:** 10 cars added, then 0. The 10 seeded cars were then deleted,
+  after a check that none of their plate numbers existed before and none had a reservation.
+- **The web pages in a browser (Java server on JDK 25, real database):**
+  - customer side: sign-up page, home page car list, booking the TEST car through the
+    reservation dialog (total 300 SAR for 3 days), "My reservations" showing it as
+    Reserved/Unpaid, sign-out, and signing back in on the login page;
+  - staff side, as a TEST admin: staff login, dashboard KPIs, reservation and car lists,
+    changing the TEST reservation to Active, recording a payment (invoice became `partial`),
+    and editing the TEST car's price.
+- **`auto_update_statuses`** (called automatically by the staff page) returned
+  `{"updated": 1}`: RES-4, an Active reservation that ended on 2025-11-26 and was never paid,
+  was closed as Cancelled.
+- **A bug found in the staff page** (inherited unchanged from the Python version, not a
+  backend bug): after a reservation's status changes, the "Manage Cars" cards are not
+  refreshed, and "Save Changes" sends the card's stale status along with the price. In the
+  test, the backend correctly set the TEST car to Rented when its reservation became Active,
+  and then saving a price change from the stale card set it back to Reserved.
 
 ### Verified without a database
 
@@ -336,13 +370,13 @@ cleanup had **identical row counts and SHA-256 checksums** to the backup for all
 
 ### Not verified yet
 
-- **`create-schema` and `seed-cars`** have not been run anywhere: not on production (the
-  tables and data already exist), and there is no local Docker database yet.
-- **`POST /reservations/auto_update_statuses`** was not called, because it changes real
-  reservations. Because of `no_past_start`, it is expected to fail with a 500 whenever there is
-  an Active reservation that has ended. Note that the staff page calls it on every load.
-- **The web pages in a browser against real data.** Only the API was exercised; the staff
-  page was not opened, because it calls `auto_update_statuses` on load.
+- **`create-schema` on an empty database.** It has only been run against the existing
+  tables, where it correctly changes nothing; creating everything from scratch needs a fresh
+  (for example local Docker) database.
+- **`auto_update_statuses` closing a paid reservation as Completed.** Only the unpaid →
+  Cancelled case occurred.
+- **Logging in as an existing real user.** Their passwords are unknown; the hash formats in
+  the database are covered by the passlib-generated unit tests.
 
 ## Known limitations
 
