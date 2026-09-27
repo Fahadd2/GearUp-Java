@@ -2,6 +2,7 @@ package com.gearup.service;
 
 import com.gearup.exception.BadRequestException;
 
+import java.math.BigDecimal;
 import java.util.regex.Pattern;
 
 /**
@@ -38,6 +39,26 @@ final class Validation {
         requireValue(value, field);
         if (value.length() < min || value.length() > max) {
             throw new BadRequestException(field + " must be between " + min + " and " + max + " characters");
+        }
+        return value;
+    }
+
+    /** Checks that the whole value matches {@code pattern}; {@code example} is shown in the error. */
+    static String requireFormat(String value, String field, Pattern pattern, String example) {
+        requireText(value, field);
+        if (!pattern.matcher(value).matches()) {
+            throw new BadRequestException(field + " must look like " + example);
+        }
+        return value;
+    }
+
+    /** A money amount that is not negative, or zero if it was left out. */
+    static BigDecimal nonNegativeOrZero(BigDecimal value, String field) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value.signum() < 0) {
+            throw new BadRequestException(field + " cannot be negative");
         }
         return value;
     }
