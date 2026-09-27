@@ -757,6 +757,12 @@ div#drawer.open {
   font-size: 0.9rem;
 }
 
+/* "display: flex" above would override the hidden attribute, so the hint
+   showed even for signed-in users. Hidden must win. */
+.modal .auth-hint[hidden] {
+  display: none;
+}
+
 .modal .auth-hint::before {
   content: "🔒";
   font-size: 1.2rem;
