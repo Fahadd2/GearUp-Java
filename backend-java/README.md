@@ -304,6 +304,10 @@ cleanup had **identical row counts and SHA-256 checksums** to the backup for all
 
 ### Verified without a database
 
+- **The build on JDK 25** (Temurin 25.0.4): `./mvnw clean package` with the committed
+  `pom.xml` and no overrides. The JDK-version rule passes, `javac` compiles with `release 23`
+  (class files are Java 23, major version 67), all tests pass, and the JAR starts and answers
+  `/health`.
 - **25 unit tests pass** (`./mvnw package` runs them):
   - `PasswordHasherTest` (9): uses hashes **produced by passlib 1.7.4**, the Python backend's
     own library: bcrypt_sha256 v2 (4 and 12 rounds), a non-ASCII (Arabic) password, legacy v1,
@@ -324,10 +328,11 @@ cleanup had **identical row counts and SHA-256 checksums** to the backup for all
 
 ### Not verified yet
 
-- **The build on JDK 23 or newer.** So far it has only been built on JDK 21, with the release
-  level overridden on the command line (`-Djava.release=21`); the committed `pom.xml` targets 23.
-- **Graceful shutdown with Ctrl+C.** Git Bash on Windows could not send a real Ctrl+C to the
-  Java process, so the shutdown hook has not been seen running.
+- **Graceful shutdown with Ctrl+C.** Automated attempts on Windows could not deliver a real
+  Ctrl+C to the Java process (Git Bash cannot signal Windows programs, and attaching to the
+  server's console from a helper process was refused), so the shutdown hook has not been seen
+  running yet. To check by hand: run the JAR in a terminal, press Ctrl+C, and look for
+  `Shutting down, waiting up to 5 s for in-flight requests` followed by `Shutdown complete`.
 - **`create-schema` and `seed-cars`** have not been run anywhere: not on production (the
   tables and data already exist), and there is no local Docker database yet.
 - **`POST /reservations/auto_update_statuses`** was not called, because it changes real
