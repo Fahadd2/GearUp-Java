@@ -108,6 +108,24 @@ Stop it with **Ctrl+C**: the shutdown hook lets running requests finish (up to 5
 > In Eclipse, the red *Terminate* button kills the process without running shutdown hooks.
 > Run the JAR from a terminal to see the graceful shutdown.
 
+## Deploy (Docker / Render)
+
+[`Dockerfile`](Dockerfile) builds the JAR in one stage (JDK 25, Maven 3.9.11) and runs it in a
+second, smaller stage that contains only a Java runtime and the JAR. No configuration is baked
+into the image.
+
+On **Render** (Java runs there as a Docker service):
+
+1. *New → Web Service*, connect the GitHub repository.
+2. **Language:** Docker. **Root Directory:** `backend-java`. **Dockerfile Path:** `./Dockerfile`.
+3. **Region:** Singapore, the closest region to the Supabase database (ap-south-1, Mumbai).
+4. **Environment variables:** `GEARUP_DB_URL`, `GEARUP_DB_USER`, `GEARUP_DB_PASSWORD` and
+   `GEARUP_JWT_SECRET` (a new random value). Do not set `PORT`; Render sets it and the app
+   binds to it.
+5. **Health Check Path:** `/health`.
+
+Render stops old instances with SIGTERM, which triggers the graceful shutdown hook.
+
 ## API
 
 Same URLs and JSON field names as the Python API, so the existing frontend works unchanged.
