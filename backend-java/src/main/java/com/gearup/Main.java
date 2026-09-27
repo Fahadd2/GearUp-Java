@@ -1,6 +1,7 @@
 package com.gearup;
 
 import com.gearup.admin.AdminTasks;
+import com.gearup.api.CarRoutes;
 import com.gearup.api.HealthRoutes;
 import com.gearup.config.AppConfig;
 import com.gearup.config.ConfigException;
@@ -8,6 +9,7 @@ import com.gearup.db.Database;
 import com.gearup.db.DatabaseException;
 import com.gearup.http.GearUpServer;
 import com.gearup.http.Router;
+import com.gearup.service.CarService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +40,7 @@ public final class Main {
             AppConfig config = AppConfig.fromEnvironment();
             Database database = new Database(config);
             switch (command) {
-                case "serve" -> serve(config);
+                case "serve" -> serve(config, database);
                 case "create-schema" -> AdminTasks.createSchema(database);
                 case "seed-cars" -> AdminTasks.seedCars(database);
                 default -> {
@@ -58,11 +60,15 @@ public final class Main {
         }
     }
 
-    private static void serve(AppConfig config) throws IOException {
+    private static void serve(AppConfig config, Database database) throws IOException {
         long startNanos = System.nanoTime();
+
+        // Wire services to the database and routes to services (plain constructor injection).
+        CarService carService = new CarService(database);
 
         Router router = new Router();
         HealthRoutes.register(router);
+        CarRoutes.register(router, carService);
 
         GearUpServer server = new GearUpServer(config.port(), router);
         // Factor IX: stop gracefully on SIGTERM / Ctrl+C.

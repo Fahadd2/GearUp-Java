@@ -3,8 +3,10 @@ package com.gearup.http;
 import com.gearup.exception.BadRequestException;
 import com.sun.net.httpserver.Headers;
 
+import java.time.DateTimeException;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * The parts of an HTTP request that route handlers need, already parsed.
@@ -51,6 +53,22 @@ public final class Request {
     /** A value from the query string, e.g. {@code ?category=small}. Empty values count as missing. */
     public Optional<String> queryParam(String name) {
         return Optional.ofNullable(queryParams.get(name)).filter(value -> !value.isBlank());
+    }
+
+    /**
+     * A query-string value converted with {@code parser}, for example
+     * {@code request.queryParam("seats", Integer::parseInt)}.
+     *
+     * @throws BadRequestException if the value is present but cannot be converted
+     */
+    public <T> Optional<T> queryParam(String name, Function<String, T> parser) {
+        Optional<String> text = queryParam(name);
+        try {
+            return text.map(parser);
+        } catch (IllegalArgumentException | DateTimeException e) {
+            // NumberFormatException is a subclass of IllegalArgumentException.
+            throw new BadRequestException("Invalid value for '" + name + "': " + text.get());
+        }
     }
 
     /** A request header such as {@code Authorization}. Header names are not case-sensitive. */

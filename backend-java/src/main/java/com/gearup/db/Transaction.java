@@ -1,5 +1,7 @@
 package com.gearup.db;
 
+import com.gearup.model.LabeledEnum;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -62,7 +64,9 @@ public final class Transaction {
         PreparedStatement statement = connection.prepareStatement(sql);
         try {
             for (int i = 0; i < params.length; i++) {
-                statement.setObject(i + 1, params[i]);
+                // Enums are stored by their label, e.g. CarStatus.AVAILABLE -> 'Available'.
+                Object value = params[i] instanceof LabeledEnum labeled ? labeled.label() : params[i];
+                statement.setObject(i + 1, value);
             }
             return statement;
         } catch (SQLException e) {
