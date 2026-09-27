@@ -189,7 +189,9 @@
     };
     const disable = (btn, on) => { if(!btn) return; btn.disabled = on; btn.classList.toggle("is-loading", on); };
 
-    // All API calls include Authorization; if 401, force login
+    // All API calls include Authorization; if 401 or 403, force login.
+    // 403 means the token is valid but not a staff token (e.g. one issued before
+    // staff tokens carried a role), so the user must sign in again as staff.
     async function api(path, opts={}) {
       const headers = Object.assign(
         {"Content-Type":"application/json"},
@@ -197,7 +199,7 @@
         token ? {"Authorization":"Bearer " + token} : {}
       );
       const r = await fetch(API_BASE + path, Object.assign({}, opts, {headers}));
-      if (r.status === 401) {
+      if (r.status === 401 || r.status === 403) {
         localStorage.removeItem("staffToken");
         localStorage.removeItem("staffRole");
         localStorage.removeItem("staffUser");

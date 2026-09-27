@@ -1,5 +1,3 @@
- const API_BASE = window.location.hostname === "localhost" 
-  ? "http://127.0.0.1:8000"
-  : window.location.origin;
-
-console.log("API Base URL:", API_BASE);
+// The Java backend serves these pages and the API from the same process and port
+// (Factor VII), so API calls always go back to wherever this page was loaded from.
+const API_BASE = window.location.origin;
