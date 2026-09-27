@@ -1,5 +1,7 @@
 package com.gearup.db;
 
+import java.sql.SQLException;
+
 /**
  * An unexpected database failure (connection lost, SQL error, constraint violated...).
  *
@@ -11,5 +13,13 @@ public class DatabaseException extends RuntimeException {
 
     public DatabaseException(String message, Throwable cause) {
         super(message, cause);
+    }
+
+    /**
+     * True if a UNIQUE constraint rejected the change (PostgreSQL error 23505), for example two
+     * sign-ups with the same email arriving at the same moment on different threads.
+     */
+    public boolean isUniqueViolation() {
+        return getCause() instanceof SQLException sql && "23505".equals(sql.getSQLState());
     }
 }

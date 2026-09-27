@@ -89,10 +89,11 @@ public final class CarService {
     /**
      * Changes the given fields of one car (staff only; the route checks the token).
      *
+     * @param updatedBy employee id of the staff member making the change, for the log
      * @throws BadRequestException if no field is given or a value is out of range
      * @throws NotFoundException   if there is no car with that id
      */
-    public void updateCar(String carId, CarUpdate update) {
+    public void updateCar(String carId, CarUpdate update, String updatedBy) {
         List<String> assignments = new ArrayList<>();
         List<Object> params = new ArrayList<>();
 
@@ -141,7 +142,7 @@ public final class CarService {
         if (updated == 0) {
             throw new NotFoundException("Car not found");
         }
-        log.info("Car {} updated: {}", carId, update);
+        log.info("Car {} updated by {}: {}", carId, updatedBy, update);
     }
 
     private static Car toCar(ResultSet row) throws SQLException {
