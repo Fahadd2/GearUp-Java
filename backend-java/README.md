@@ -325,14 +325,17 @@ cleanup had **identical row counts and SHA-256 checksums** to the backup for all
 - **In a browser:** the staff page with an old role-less token redirects to the login page.
 - **Configuration:** a missing variable or a short JWT secret stops startup with a clear message.
 - 20 simultaneous requests were spread across the worker threads.
+- **Graceful shutdown with Ctrl+C** (JDK 25, Windows PowerShell): the shutdown hook ran on the
+  `shutdown-hook` thread and the port was released. With no requests in flight, the stop took
+  12 ms, because `server.stop(5)` only waits while requests are still running:
+
+  ```
+  04:58:34.156 [shutdown-hook] INFO GearUpServer - Shutting down, waiting up to 5 s for in-flight requests
+  04:58:34.168 [shutdown-hook] INFO GearUpServer - Shutdown complete
+  ```
 
 ### Not verified yet
 
-- **Graceful shutdown with Ctrl+C.** Automated attempts on Windows could not deliver a real
-  Ctrl+C to the Java process (Git Bash cannot signal Windows programs, and attaching to the
-  server's console from a helper process was refused), so the shutdown hook has not been seen
-  running yet. To check by hand: run the JAR in a terminal, press Ctrl+C, and look for
-  `Shutting down, waiting up to 5 s for in-flight requests` followed by `Shutdown complete`.
 - **`create-schema` and `seed-cars`** have not been run anywhere: not on production (the
   tables and data already exist), and there is no local Docker database yet.
 - **`POST /reservations/auto_update_statuses`** was not called, because it changes real
