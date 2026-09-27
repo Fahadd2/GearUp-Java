@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,7 +35,14 @@ public final class Router implements HttpHandler {
     private record Route(String method, Pattern pattern, List<String> paramNames, RouteHandler handler) {
     }
 
+    // Routes are all registered in Main before the server starts; after that the list is only read.
     private final List<Route> routes = new ArrayList<>();
+    private final StaticFiles staticFiles;
+
+    /** @param staticFiles the frontend files, served for GET requests that match no API route */
+    public Router(StaticFiles staticFiles) {
+        this.staticFiles = staticFiles;
+    }
 
     public void get(String pathTemplate, RouteHandler handler) {
         add("GET", pathTemplate, handler);
@@ -114,6 +122,12 @@ public final class Router implements HttpHandler {
 
         if (pathExists) {
             throw new ApiException(405, "Method " + method + " not allowed on " + path);
+        }
+        if (method.equals("GET")) {
+            Optional<Response> file = staticFiles.find(path);
+            if (file.isPresent()) {
+                return file.get();
+            }
         }
         throw new NotFoundException("No endpoint at " + path);
     }

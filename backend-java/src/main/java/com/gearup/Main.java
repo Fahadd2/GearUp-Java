@@ -18,6 +18,7 @@ import com.gearup.db.Database;
 import com.gearup.db.DatabaseException;
 import com.gearup.http.GearUpServer;
 import com.gearup.http.Router;
+import com.gearup.http.StaticFiles;
 import com.gearup.service.AuthService;
 import com.gearup.service.BookingService;
 import com.gearup.service.CarService;
@@ -95,7 +96,7 @@ public final class Main {
         PaymentService paymentService = new PaymentService(database);
         DashboardService dashboardService = new DashboardService(database);
 
-        Router router = new Router();
+        Router router = new Router(new StaticFiles("/static"));
         HealthRoutes.register(router);
         AuthRoutes.register(router, authService, guard);
         CarRoutes.register(router, carService, guard);
