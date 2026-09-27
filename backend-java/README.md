@@ -31,7 +31,7 @@ Python version.
 |---|---|---|
 | JDK | **23 or newer** | The build refuses older JDKs with a clear message. |
 | Maven | 3.9.11 | Not needed on your PATH: use the included wrapper `./mvnw` (`mvnw.cmd` on Windows). |
-| PostgreSQL | 16 | Locally via Docker (below), or a hosted database such as Supabase. |
+| PostgreSQL | 17 | The production database runs 17.6; use the same major version locally (Factor X). |
 
 **Eclipse:** *File → Import → Maven → Existing Maven Projects*, choose the `backend-java` folder.
 
@@ -78,10 +78,10 @@ This compiles the code, runs the unit tests and produces **one executable file**
 
 ## Set up the database (admin processes)
 
-Start a local PostgreSQL 16 in Docker:
+Start a local PostgreSQL 17 in Docker (the same major version as production):
 
 ```bash
-docker run -d --name gearup-db -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=gearup -p 5432:5432 postgres:16
+docker run -d --name gearup-db -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=gearup -p 5432:5432 postgres:17
 ```
 
 Then run the one-off admin commands. They are in the same JAR and use the same environment
@@ -212,8 +212,19 @@ Responses by HTTP status: {200=1, 409=9}
 PASS: exactly one booking succeeded; the other 9 got 409 Conflict.
 ```
 
-It exits with code 0 on PASS and 1 otherwise. **This has not been run yet** (see
-[Testing status](#testing-status)).
+It exits with code 0 on PASS and 1 otherwise. It creates only records marked `TEST`
+(`@example.invalid` emails), so they are easy to find and delete afterwards.
+
+**Result against the production database (2026-09-27), on a TEST car:**
+
+```
+Responses by HTTP status: {200=1, 409=9}
+PASS: exactly one booking succeeded; the other 9 got 409 Conflict.
+```
+
+The server log shows the lock at work: the ten requests arrived together, the booking finished
+after 4.3 s, and the nine 409s then completed one after another, between 4.8 s and 9.6 s, as
+each waited its turn for the car's row lock.
 
 ## Changes from the Python backend
 
@@ -240,9 +251,15 @@ The API is kept compatible, with these deliberate changes:
 - Money in error messages always uses ASCII digits, even on a server with an Arabic locale.
 
 **Database**
-- The `reservations` table no longer has `CHECK (start_date >= CURRENT_DATE)`. PostgreSQL
-  re-checks CHECK constraints on every UPDATE, so once a booking's start date had passed even
-  changing its status would fail. `BookingService` enforces the rule when booking instead.
+- `schema.sql` does not create `CHECK (start_date >= CURRENT_DATE)` (named `no_past_start` in
+  production). PostgreSQL re-checks CHECK constraints on every UPDATE, so once a booking's start
+  date has passed, *any* change to it fails, including starting, closing or cancelling it. This
+  was confirmed on the production database: a no-op `UPDATE ... SET status = status` on a
+  reservation that started 355 days ago was refused with `23514 ... violates check constraint
+  "no_past_start"` (in a transaction that was rolled back). All 6 existing reservations are
+  affected, in both the Python and the Java backend. `BookingService` enforces the rule when a
+  booking is created instead. Removing it from production is a separate decision:
+  `ALTER TABLE public.reservations DROP CONSTRAINT no_past_start;`
 - Readable IDs (`CAR-12`) are `GENERATED ALWAYS AS (...) STORED` columns.
 
 **Compatibility kept**
@@ -260,7 +277,32 @@ The API is kept compatible, with these deliberate changes:
 
 An honest summary of what has and has not been verified.
 
-### Verified
+### Verified against the production database (2026-09-27)
+
+Rules followed: all six tables were backed up to CSV (outside the repository) first; no
+`create-schema`/`seed-cars`, no DROP/ALTER/TRUNCATE, no change to any existing row or password;
+writes used only records marked `TEST`, which were deleted afterwards. A fresh snapshot after
+cleanup had **identical row counts and SHA-256 checksums** to the backup for all six tables.
+
+- **Schema matches the code (read-only):** all six enum types and their values (including
+  `payment_method`), every table's columns, and the generated `CAR-`/`RES-`/... ids.
+- **Existing password hashes are in formats the code reads:** bcrypt_sha256 v2 for 9 customers
+  and both employees, plain bcrypt for 1 customer (the Python customer login rejected that
+  format; the Java one accepts it). Real users' logins were not tried, since their passwords
+  are unknown; the passlib-generated test vectors cover these formats.
+- **Every GET endpoint** returns 200 with the field names the frontend uses, on real data.
+- **40 of 40 write checks passed** on TEST records: sign-up (and 409 on a duplicate email), login,
+  password reset, staff login (and 401 on the wrong role), `create-staff`, booking with the
+  right total, 409 on an overlap, date search hiding a booked car, both reservation lists,
+  car update, rental start (and 400 when repeated), partial and full payments (and 400 on
+  overpaying or paying twice), rental close with a damage fee keeping the invoice `partial`,
+  a manual cancel, the dashboard, and 403 for every wrong-role call.
+- **The concurrency demo passed** (see [above](#concurrency-demo-10-simultaneous-bookings)).
+- **The `no_past_start` problem is real** (see [Changes](#changes-from-the-python-backend)).
+- The log line `Booking {} confirmed for car {}` appeared once for each successful booking,
+  and the server logged no errors.
+
+### Verified without a database
 
 - **25 unit tests pass** (`./mvnw package` runs them):
   - `PasswordHasherTest` (9): uses hashes **produced by passlib 1.7.4**, the Python backend's
@@ -286,22 +328,21 @@ An honest summary of what has and has not been verified.
   level overridden on the command line (`-Djava.release=21`); the committed `pom.xml` targets 23.
 - **Graceful shutdown with Ctrl+C.** Git Bash on Windows could not send a real Ctrl+C to the
   Java process, so the shutdown hook has not been seen running.
-- **Nothing has been run against a real database yet**, including:
-  - `create-schema` (running it twice), `seed-cars` (twice) and `create-staff`;
-  - whether the enum type names match the existing Supabase database, especially
-    `payment_method`, which is a guess;
-  - the `start_date >= CURRENT_DATE` CHECK constraint problem described above;
-  - the successful path of every endpoint: car search and filters, sign-up, login with
-    existing Supabase users, booking, reservation lists, status changes, rental start/close,
-    payments, invoices and the dashboard;
-  - the [concurrency demo](#concurrency-demo-10-simultaneous-bookings);
-  - the web pages end to end against real data.
+- **`create-schema` and `seed-cars`** have not been run anywhere: not on production (the
+  tables and data already exist), and there is no local Docker database yet.
+- **`POST /reservations/auto_update_statuses`** was not called, because it changes real
+  reservations. Because of `no_past_start`, it is expected to fail with a 500 whenever there is
+  an Active reservation that has ended. Note that the staff page calls it on every load.
+- **The web pages in a browser against real data.** Only the API was exercised; the staff
+  page was not opened, because it calls `auto_update_statuses` on load.
 
 ## Known limitations
 
-- **A new database connection per request.** There is no connection pool (such as HikariCP)
-  to keep the dependency list small. This is fine locally, but slower against a remote
-  database; Supabase's own connection pooler helps.
+- **A new database connection per request, which makes every request slow against a remote
+  database.** There is no connection pool (such as HikariCP), to keep the dependency list
+  small. Measured against the production Supabase database: opening a connection takes
+  1.4–2.8 s, while a query on an open connection takes about 0.2 s, so most requests take
+  about 2 s. A connection pool would fix this.
 - **Password reset** only needs the email and license number, as in the Python version.
   A real system would send a reset link by email.
 - **Tokens cannot be revoked** before they expire (120 minutes), a normal trade-off of

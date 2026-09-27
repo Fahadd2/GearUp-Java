@@ -79,11 +79,14 @@ public class ConcurrentBookingDemo {
         System.exit(correct ? 0 : 1);
     }
 
-    /** Creates a throwaway customer (unique email and license) and returns their login token. */
+    /**
+     * Creates a throwaway customer and returns their login token. The customer is clearly marked
+     * (name TEST, an @example.invalid address that can never be real) so it is easy to find and delete.
+     */
     private static String signUpDemoCustomer(HttpClient http, String baseUrl) throws Exception {
         long unique = System.currentTimeMillis();
-        String body = "{\"first_name\":\"Demo\",\"last_name\":\"Customer\","
-                + "\"email\":\"demo" + unique + "@example.com\",\"license_no\":\"DEMO" + unique + "\","
+        String body = "{\"first_name\":\"TEST\",\"last_name\":\"TEST concurrency demo\","
+                + "\"email\":\"test-demo-" + unique + "@example.invalid\",\"license_no\":\"TEST-DEMO-" + unique + "\","
                 + "\"license_expiry\":\"" + LocalDate.now().plusYears(3) + "\","
                 + "\"date_of_birth\":\"1995-01-01\",\"password\":\"demo-password\"}";
         HttpResponse<String> response;

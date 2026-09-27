@@ -1,4 +1,4 @@
--- GearUp database schema (PostgreSQL 16).
+-- GearUp database schema (PostgreSQL 17, same major version as production).
 --
 -- Factor XII: run as a one-off admin process from the same build and config as the app:
 --     java -jar target/gearup-backend.jar create-schema
@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS public.reservations (
     created_at          timestamp with time zone DEFAULT now(),
     created_by_emp_id   text,
     CONSTRAINT reservations_pkey PRIMARY KEY (res_id),
+    CONSTRAINT min_one_day CHECK (end_date > start_date),
     CONSTRAINT reservations_customer_license_no_fkey
         FOREIGN KEY (customer_license_no) REFERENCES public.customers (license_no),
     CONSTRAINT reservations_car_id_fkey FOREIGN KEY (car_id) REFERENCES public.cars (car_id),
