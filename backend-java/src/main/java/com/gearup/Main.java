@@ -4,6 +4,7 @@ import com.gearup.admin.AdminTasks;
 import com.gearup.api.AuthRoutes;
 import com.gearup.api.CarRoutes;
 import com.gearup.api.HealthRoutes;
+import com.gearup.api.ReservationRoutes;
 import com.gearup.auth.AuthGuard;
 import com.gearup.auth.PasswordHasher;
 import com.gearup.auth.TokenService;
@@ -14,6 +15,7 @@ import com.gearup.db.DatabaseException;
 import com.gearup.http.GearUpServer;
 import com.gearup.http.Router;
 import com.gearup.service.AuthService;
+import com.gearup.service.BookingService;
 import com.gearup.service.CarService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,11 +81,13 @@ public final class Main {
         AuthGuard guard = new AuthGuard(tokens);
         AuthService authService = new AuthService(database, new PasswordHasher(), tokens);
         CarService carService = new CarService(database);
+        BookingService bookingService = new BookingService(database);
 
         Router router = new Router();
         HealthRoutes.register(router);
         AuthRoutes.register(router, authService, guard);
         CarRoutes.register(router, carService, guard);
+        ReservationRoutes.register(router, bookingService, guard);
 
         GearUpServer server = new GearUpServer(config.port(), router);
         // Factor IX: stop gracefully on SIGTERM / Ctrl+C.

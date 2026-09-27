@@ -32,4 +32,9 @@ public interface LabeledEnum {
                 .collect(Collectors.joining(", "));
         throw new IllegalArgumentException("'" + label + "' is not one of: " + allowed);
     }
+
+    /** Like {@link #fromLabel}, but a {@code null} label (e.g. from a LEFT JOIN) gives {@code null}. */
+    static <E extends Enum<E> & LabeledEnum> E fromNullableLabel(Class<E> type, String label) {
+        return label == null ? null : fromLabel(type, label);
+    }
 }
