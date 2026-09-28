@@ -9,11 +9,15 @@ It uses **no web framework**: only the JDK's built-in HTTP server, JDBC, and fiv
 libraries. It serves the same API (same URLs and JSON) and the same web pages as the
 Python version.
 
+All the code is in the [`backend-java/`](backend-java) folder. **Run every command in this
+README from inside that folder** (`cd backend-java`).
+
 - [Requirements](#requirements)
 - [Configure](#configure)
 - [Build](#build)
 - [Set up the database (admin processes)](#set-up-the-database-admin-processes)
 - [Run](#run)
+- [Deploy (Docker / Render)](#deploy-docker--render)
 - [API](#api)
 - [Project structure](#project-structure)
 - [The twelve factors in this code](#the-twelve-factors-in-this-code)
@@ -49,7 +53,7 @@ variable is missing.
 | `GEARUP_DB_PASSWORD` | yes | | Database password |
 | `GEARUP_JWT_SECRET` | yes | output of `openssl rand -base64 48` | Key that signs login tokens, at least 32 characters |
 
-[`.env.example`](.env.example) lists them all. Copy it to `.env` (which is git-ignored) and fill
+[`.env.example`](backend-java/.env.example) lists them all. Copy it to `.env` (which is git-ignored) and fill
 in real values. Java does not read `.env` files itself, so load it into your shell first:
 
 **PowerShell**
@@ -70,6 +74,7 @@ set -a; . ./.env; set +a
 ## Build
 
 ```bash
+cd backend-java
 ./mvnw package
 ```
 
@@ -110,7 +115,7 @@ Stop it with **Ctrl+C**: the shutdown hook lets running requests finish (up to 5
 
 ## Deploy (Docker / Render)
 
-[`Dockerfile`](Dockerfile) builds the JAR in one stage (JDK 25, Maven 3.9.11) and runs it in a
+[`Dockerfile`](backend-java/Dockerfile) builds the JAR in one stage (JDK 25, Maven 3.9.11) and runs it in a
 second, smaller stage that contains only a Java runtime and the JAR. No configuration is baked
 into the image.
 
@@ -154,6 +159,8 @@ route) → **403**. "Staff" means role `employee` or `admin`.
 
 ## Project structure
 
+Inside `backend-java/`:
+
 ```
 src/main/java/com/gearup/
   Main.java        entry point: picks serve / create-schema / seed-cars / create-staff, wires objects together
@@ -182,17 +189,17 @@ exception flows back up to the Router, which is the one place that turns it into
 | # | Factor | Where it is implemented |
 |---|---|---|
 | I | **Codebase**: one repo, many deploys | This repository. Every environment runs the same code; only the environment variables differ. |
-| II | **Dependencies**: explicitly declared | [`pom.xml`](pom.xml) pins every dependency to an exact version: slf4j-api and slf4j-simple 2.0.16, Gson 2.11.0, PostgreSQL JDBC 42.7.13, jBCrypt 0.4, and JUnit 5.11.4 (tests only). The Maven wrapper pins Maven 3.9.11. |
-| III | **Config**: in the environment | [`AppConfig`](src/main/java/com/gearup/config/AppConfig.java) reads `PORT` and `GEARUP_*` only and fails fast if one is missing; [`.env.example`](.env.example) documents them. The old Spring `application.properties` with a hardcoded password was removed. |
-| IV | **Backing services**: attached resources | [`Database`](src/main/java/com/gearup/db/Database.java) finds PostgreSQL only through `GEARUP_DB_URL`/`_USER`/`_PASSWORD`. Moving from local Docker to Supabase is a config change, not a code change. |
+| II | **Dependencies**: explicitly declared | [`pom.xml`](backend-java/pom.xml) pins every dependency to an exact version: slf4j-api and slf4j-simple 2.0.16, Gson 2.11.0, PostgreSQL JDBC 42.7.13, jBCrypt 0.4, and JUnit 5.11.4 (tests only). The Maven wrapper pins Maven 3.9.11. |
+| III | **Config**: in the environment | [`AppConfig`](backend-java/src/main/java/com/gearup/config/AppConfig.java) reads `PORT` and `GEARUP_*` only and fails fast if one is missing; [`.env.example`](backend-java/.env.example) documents them. The old Spring `application.properties` with a hardcoded password was removed. |
+| IV | **Backing services**: attached resources | [`Database`](backend-java/src/main/java/com/gearup/db/Database.java) finds PostgreSQL only through `GEARUP_DB_URL`/`_USER`/`_PASSWORD`. Moving from local Docker to Supabase is a config change, not a code change. |
 | V | **Build, release, run**: separate stages | Build: `./mvnw package` creates one JAR (shade plugin in `pom.xml`). Release: that JAR plus an environment. Run: `java -jar gearup-backend.jar`. |
-| VI | **Processes**: stateless | No sessions or bookings are kept in memory. Logins are signed tokens ([`TokenService`](src/main/java/com/gearup/auth/TokenService.java)); all data and all locks live in PostgreSQL. |
-| VII | **Port binding**: self-contained | [`GearUpServer`](src/main/java/com/gearup/http/GearUpServer.java) uses `com.sun.net.httpserver.HttpServer` bound to `$PORT`; it also serves the web pages ([`StaticFiles`](src/main/java/com/gearup/http/StaticFiles.java)). No external web server. |
+| VI | **Processes**: stateless | No sessions or bookings are kept in memory. Logins are signed tokens ([`TokenService`](backend-java/src/main/java/com/gearup/auth/TokenService.java)); all data and all locks live in PostgreSQL. |
+| VII | **Port binding**: self-contained | [`GearUpServer`](backend-java/src/main/java/com/gearup/http/GearUpServer.java) uses `com.sun.net.httpserver.HttpServer` bound to `$PORT`; it also serves the web pages ([`StaticFiles`](backend-java/src/main/java/com/gearup/http/StaticFiles.java)). No external web server. |
 | VIII | **Concurrency**: scale out with processes | A fixed pool of **10** worker threads is the server's executor. To handle more load, run more copies; `SELECT ... FOR UPDATE` row locks keep that safe across processes. |
-| IX | **Disposability**: fast start, graceful stop | Starts in about 0.1–0.2 s (measured 79–223 ms). A shutdown hook calls `server.stop(5)` and `pool.shutdown()`. Exceptions are caught and logged at the request boundary in [`Router`](src/main/java/com/gearup/http/Router.java). |
-| X | **Dev/prod parity** | Same JDK level everywhere (enforced by the build), same pinned dependencies, PostgreSQL in every environment, same [`schema.sql`](src/main/resources/db/schema.sql). |
-| XI | **Logs**: event streams | SLF4J to **stdout** only ([`simplelogger.properties`](src/main/resources/simplelogger.properties)); no log files. Example: `BookingService` logs `Booking {} confirmed for car {}`. |
-| XII | **Admin processes**: one-off commands | `create-schema`, `seed-cars` and `create-staff` in [`AdminTasks`](src/main/java/com/gearup/admin/AdminTasks.java) run from the same JAR and config as the server. |
+| IX | **Disposability**: fast start, graceful stop | Starts in about 0.1–0.2 s (measured 79–223 ms). A shutdown hook calls `server.stop(5)` and `pool.shutdown()`. Exceptions are caught and logged at the request boundary in [`Router`](backend-java/src/main/java/com/gearup/http/Router.java). |
+| X | **Dev/prod parity** | Same JDK level everywhere (enforced by the build), same pinned dependencies, PostgreSQL in every environment, same [`schema.sql`](backend-java/src/main/resources/db/schema.sql). |
+| XI | **Logs**: event streams | SLF4J to **stdout** only ([`simplelogger.properties`](backend-java/src/main/resources/simplelogger.properties)); no log files. Example: `BookingService` logs `Booking {} confirmed for car {}`. |
+| XII | **Admin processes**: one-off commands | `create-schema`, `seed-cars` and `create-staff` in [`AdminTasks`](backend-java/src/main/java/com/gearup/admin/AdminTasks.java) run from the same JAR and config as the server. |
 
 ## Course topics in this code
 
