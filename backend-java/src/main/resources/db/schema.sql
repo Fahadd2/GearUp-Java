@@ -27,7 +27,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-    CREATE TYPE public.payment_status AS ENUM ('unpaid', 'partial', 'paid');
+    CREATE TYPE public.payment_status AS ENUM ('unpaid', 'paid', 'partial');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN

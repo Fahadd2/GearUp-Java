@@ -86,8 +86,11 @@ This compiles the code, runs the unit tests and produces **one executable file**
 Start a local PostgreSQL 17 in Docker (the same major version as production):
 
 ```bash
-docker run -d --name gearup-db -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=gearup -p 5432:5432 postgres:17
+docker run -d --name gearup-db -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=gearup -p 127.0.0.1:5432:5432 postgres:17
 ```
+
+`127.0.0.1:` makes the database reachable only from this computer. Without it, Docker opens
+port 5432 to the whole network, with the easy-to-guess password `dev`.
 
 Then run the one-off admin commands. They are in the same JAR and use the same environment
 variables as the server (Factor XII):
@@ -374,6 +377,19 @@ Cancelled**, the expected result of `auto_update_statuses` described below.
 - **Logging in as a customer created on the deployed Java site:** `POST /auth/login` returned
   200 with a token. The same credentials correctly got 401 on the staff login.
 
+### Fresh local database (Docker, PostgreSQL 17.11, 2026-09-28)
+
+Following this README from an empty database, with the `docker run` command above:
+
+- **`create-schema` on an empty database** created all six enum types and all six tables,
+  with the expected columns, the generated `CAR-`/`RES-`/... ids and the `min_one_day` check.
+  A second run changed nothing.
+- **`seed-cars`:** 10 cars added, then 0 on a second run.
+- **All 40 write checks passed**, the same suite that was run against production.
+- **The concurrency demo passed** on car `CAR-1` (`{200=1, 409=9}`). Against a local database
+  each booking request took about 0.1 s, compared with several seconds against the remote
+  Supabase database (see [Known limitations](#known-limitations)).
+
 ### Verified without a database
 
 - **The build on JDK 25** (Temurin 25.0.4): `./mvnw clean package` with the committed
@@ -405,12 +421,6 @@ Cancelled**, the expected result of `auto_update_statuses` described below.
   04:58:34.156 [shutdown-hook] INFO GearUpServer - Shutting down, waiting up to 5 s for in-flight requests
   04:58:34.168 [shutdown-hook] INFO GearUpServer - Shutdown complete
   ```
-
-### Not verified yet
-
-- **`create-schema` on an empty database.** It has only been run against the existing
-  tables, where it correctly changes nothing; creating everything from scratch needs a fresh
-  (for example local Docker) database.
 
 ## Known limitations
 
