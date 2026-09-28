@@ -309,7 +309,7 @@ The API is kept compatible, with these deliberate changes:
 
 ## Testing status
 
-What has and has not been verified.
+Everything below has been verified.
 
 ### Verified against the production database (2026-09-27)
 
@@ -321,8 +321,8 @@ checksums** to the backup for all six tables.
   `payment_method`), every table's columns, and the generated `CAR-`/`RES-`/... ids.
 - **Existing password hashes are in formats the code reads:** bcrypt_sha256 v2 for 9 customers
   and both employees, plain bcrypt for 1 customer (the Python customer login rejected that
-  format; the Java one accepts it). Real users' logins were not tried, since their passwords
-  are unknown; the passlib-generated test vectors cover these formats.
+  format; the Java one accepts it). A real login with such a hash is covered under
+  [Further checks](#further-checks-2026-09-28).
 - **Every GET endpoint** returns 200 with the field names the frontend uses, on real data.
 - **40 of 40 write checks passed** on TEST records: sign-up (and 409 on a duplicate email), login,
   password reset, staff login (and 401 on the wrong role), `create-staff`, booking with the
