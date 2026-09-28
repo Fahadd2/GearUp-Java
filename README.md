@@ -362,6 +362,18 @@ Cancelled**, the expected result of `auto_update_statuses` described below.
   list reloads after a status change, and "Save Changes" sends only the fields that were
   actually changed (checked in the browser with a stubbed server).
 
+### Further checks (2026-09-28)
+
+- **`auto_update_statuses` closing a paid reservation:** a `TEST` reservation that was Active,
+  fully paid and ended two days earlier became **Completed**, and its car went from Rented to
+  **Available**. The `TEST` records were deleted afterwards, and a row-by-row comparison with a
+  backup taken just before found no differences.
+- **Logging in with a password hashed by the Python backend's library:** a bcrypt_sha256 hash
+  generated with passlib 1.7.4 was stored on an existing admin account, and that account
+  signed in successfully on the deployed Java backend (Render).
+- **Logging in as a customer created on the deployed Java site:** `POST /auth/login` returned
+  200 with a token. The same credentials correctly got 401 on the staff login.
+
 ### Verified without a database
 
 - **The build on JDK 25** (Temurin 25.0.4): `./mvnw clean package` with the committed
@@ -399,10 +411,6 @@ Cancelled**, the expected result of `auto_update_statuses` described below.
 - **`create-schema` on an empty database.** It has only been run against the existing
   tables, where it correctly changes nothing; creating everything from scratch needs a fresh
   (for example local Docker) database.
-- **`auto_update_statuses` closing a paid reservation as Completed.** Only the unpaid →
-  Cancelled case occurred.
-- **Logging in as an existing real user.** Their passwords are unknown; the hash formats in
-  the database are covered by the passlib-generated unit tests.
 
 ## Known limitations
 
