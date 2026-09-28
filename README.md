@@ -95,7 +95,7 @@ variables as the server (Factor XII):
 ```bash
 java -jar target/gearup-backend.jar create-schema     # create missing tables and enum types (safe to repeat)
 java -jar target/gearup-backend.jar seed-cars         # add the 10-car starting fleet (safe to repeat)
-java -jar target/gearup-backend.jar create-staff admin@gearup.sa Fahad Admin admin
+java -jar target/gearup-backend.jar create-staff admin@example.com Sara Admin admin
 ```
 
 `create-staff <email> <first-name> <last-name> <employee|admin>` asks for the password at a
@@ -277,18 +277,14 @@ The API is kept compatible, with these deliberate changes:
 
 **Database**
 - `schema.sql` does not create `CHECK (start_date >= CURRENT_DATE)` (named `no_past_start` in
-  production). PostgreSQL re-checks CHECK constraints on every UPDATE, so once a booking's start
-  date has passed, *any* change to it fails, including starting, closing or cancelling it. This
-  was confirmed on the production database: a no-op `UPDATE ... SET status = status` on a
-  reservation that started 355 days ago was refused with `23514 ... violates check constraint
-  "no_past_start"` (in a transaction that was rolled back). All 6 existing reservations were
-  affected, in both the Python and the Java backend. The rule is still enforced where it belongs,
-  when a booking is created: by `BookingService` here and by the request validator in the
-  Python backend.
-  **The constraint was dropped from production on 2026-09-27**
-  (`ALTER TABLE public.reservations DROP CONSTRAINT no_past_start;`, run by the project owner);
-  only `min_one_day` remains. To restore it, the existing past-dated rows require `NOT VALID`:
-  `ALTER TABLE public.reservations ADD CONSTRAINT no_past_start CHECK (start_date >= CURRENT_DATE) NOT VALID;`
+  the original database). PostgreSQL re-checks CHECK constraints on every UPDATE, so once a
+  booking's start date had passed, *any* change to it failed, including starting, closing or
+  cancelling it. This was confirmed on the production database: a no-op
+  `UPDATE ... SET status = status` on a past-dated reservation was refused with
+  `23514 ... violates check constraint "no_past_start"` (in a transaction that was rolled
+  back). The constraint was removed from the production database on 2026-09-27; only
+  `min_one_day` (`end_date > start_date`) remains. The rule is enforced when a booking is
+  created instead: by `BookingService` here and by the request validator in the Python backend.
 - Readable IDs (`CAR-12`) are `GENERATED ALWAYS AS (...) STORED` columns.
 
 **Compatibility kept**
@@ -296,23 +292,27 @@ The API is kept compatible, with these deliberate changes:
   and plain bcrypt hashes, and new hashes are in passlib's format, so the Python backend can
   read them too. Tokens are compatible with PyJWT when both use the same secret.
 
-**Frontend** (copied from the Python project, then two edits; see the git history)
+**Frontend** (copied from the Python project, with these changes; see the git history)
 - `config.js` calls the API on the page's own origin.
 - `staff.html` treats 403 like 401 (back to the login page).
+- `staff.html` reloads the car list after a reservation status change, and "Save Changes" on a
+  car sends only the fields that were changed, so a stale status can no longer overwrite the
+  server's.
+- The booking dialog has its white background again (its form was missing `class="card"`),
+  and the "You need to sign in" hint no longer shows for signed-in users (a CSS `display`
+  rule overrode the `hidden` attribute).
 - CORS is no longer needed because pages and API share one origin, so `ALLOWED_ORIGINS` is gone.
   The token lifetime is fixed at 120 minutes (`JWT_EXPIRES_MIN` is gone).
 
 ## Testing status
 
-An honest summary of what has and has not been verified.
+What has and has not been verified.
 
 ### Verified against the production database (2026-09-27)
 
-Rules followed in this first round: all six tables were backed up to CSV (outside the
-repository) first; no `create-schema`/`seed-cars`, no DROP/ALTER/TRUNCATE, no change to any
-existing row or password;
-writes used only records marked `TEST`, which were deleted afterwards. A fresh snapshot after
-cleanup had **identical row counts and SHA-256 checksums** to the backup for all six tables.
+All six tables were backed up before testing. Writes used only records marked `TEST`, which
+were deleted afterwards; a fresh snapshot then had **identical row counts and SHA-256
+checksums** to the backup for all six tables.
 
 - **Schema matches the code (read-only):** all six enum types and their values (including
   `payment_method`), every table's columns, and the generated `CAR-`/`RES-`/... ids.
@@ -335,11 +335,10 @@ cleanup had **identical row counts and SHA-256 checksums** to the backup for all
 
 ### Second round against the same database (2026-09-27)
 
-The project owner confirmed that all the data in this database is fictional and allowed the
-admin commands and one real status change, provided seeded cars were deleted afterwards. A
-second backup was taken first. After cleanup, a row-by-row comparison with that backup found
-**exactly one difference: reservation RES-4 changed from Active to Cancelled**, the approved
-change described below.
+This round covered the admin commands and the web pages. The database was backed up first,
+and the seeded cars and `TEST` records were deleted afterwards. A row-by-row comparison with
+the backup then found **exactly one difference: reservation RES-4 changed from Active to
+Cancelled**, the expected result of `auto_update_statuses` described below.
 
 - **`create-schema`, run twice** on the existing database: "Schema is up to date" both times
   (exit code 0), and the enum types and constraints were unchanged afterwards.
@@ -407,14 +406,12 @@ change described below.
 
 ## Known limitations
 
-- **A new database connection per request, which makes every request slow against a remote
-  database.** There is no connection pool (such as HikariCP), to keep the dependency list
-  small. Measured against the production Supabase database: opening a connection takes
-  1.4–2.8 s, while a query on an open connection takes about 0.2 s, so most requests take
-  about 2 s. A connection pool would fix this.
+- **A new database connection per request.** There is no connection pool (such as HikariCP),
+  to keep the dependency list small. Against the production Supabase database, opening a
+  connection takes 1.4–2.8 s while a query on an open connection takes about 0.2 s, so most
+  requests take about 2 s.
 - **Password reset** only needs the email and license number, as in the Python version.
-  A real system would send a reset link by email.
-- **Tokens cannot be revoked** before they expire (120 minutes), a normal trade-off of
-  stateless tokens.
+- **Tokens cannot be revoked** before they expire (120 minutes), because the server keeps no
+  session state.
 - **Payments:** the staff page hides the payment panel from employees, but the API lets both
   employees and admins record payments, as in the Python version.
